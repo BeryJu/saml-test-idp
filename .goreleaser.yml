@@ -1,0 +1,71 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - binary: '{{ .ProjectName }}'
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    ldflags:
+      - '-s -w -X beryju.io/{{ .ProjectName }}/cmd.Version={{.Version}}'
+    targets:
+      - linux_arm_6
+      - linux_arm_7
+      - linux_arm64
+      - linux_amd64
+      - darwin_arm64
+      - darwin_amd64
+      - freebsd_arm64
+      - freebsd_amd64
+      - windows_arm64
+      - windows_amd64
+
+dockers_v2:
+  - images:
+      - "ghcr.io/beryju/{{ .ProjectName }}"
+    tags:
+      - "{{ .Version }}"
+      - "{{ if .IsNightly }}nightly{{ end }}"
+      - "{{ if not .IsNightly }}latest{{ end }}"
+    labels:
+      "org.opencontainers.image.description": "Small, SAML Identity provider for testing and debugging"
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.name": "{{.ProjectName}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
+
+archives:
+  - id: raw
+    formats: binary
+    name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}'
+  - id: tar
+    formats: tar.gz
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}'
+
+checksum:
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+  algorithm: sha256
+
+homebrew_casks:
+- ids:
+    - tar
+  commit_author:
+    name: goreleaserbot
+    email: goreleaser@beryju.org
+  repository:
+    owner: beryju
+    name: homebrew-tap
+  homepage: 'https://github.com/beryju/{{ .ProjectName }}'
+  description: 'Small, SAML Identity provider for testing and debugging'
+  hooks:
+    post:
+      install: |
+        if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/{{ .ProjectName }}"]
+        end
