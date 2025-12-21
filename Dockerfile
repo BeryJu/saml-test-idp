@@ -1,4 +1,4 @@
-FROM docker.io/library/debian:12-slim
+FROM docker.io/library/debian:13-slim
 ARG TARGETPLATFORM
 
 RUN apt-get update && \
