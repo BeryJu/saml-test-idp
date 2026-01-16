@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	beryju.io/saml-test-sp v0.0.0-20251121113513-9f2036f4bf21
 	github.com/crewjam/saml v0.5.1
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	golang.org/x/crypto v0.47.0
 )
 
