@@ -42,7 +42,7 @@ func mustBcrypt(pw string) []byte {
 	return h
 }
 
-func RunServer() {
+func newServer() *Server {
 	config := helpers.LoadConfig()
 	err := config.Store.Put("/users/user1", samlidp.User{
 		Name:           "user1",
@@ -71,7 +71,6 @@ func RunServer() {
 	}
 
 	metadata := helpers.Env("IDP_METADATA_URL", "")
-	var svc samlidp.Service
 	if metadata == "" {
 		panic("Metadata required")
 	}
@@ -83,12 +82,22 @@ func RunServer() {
 	if err != nil {
 		panic(err)
 	}
-	svc = samlidp.Service{
+	svc := samlidp.Service{
 		Name:     "test-app",
 		Metadata: *desc,
 	}
 
 	err = config.Store.Put("/services/test-app", svc)
+	if err != nil {
+		panic(err)
+	}
+
+	// Required for /login/test-app (IdP-initiated) to resolve
+	err = config.Store.Put("/shortcuts/test-app", samlidp.Shortcut{
+		Name:                  "test-app",
+		ServiceProviderID:     desc.EntityID,
+		URISuffixAsRelayState: true,
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -99,27 +108,30 @@ func RunServer() {
 	}
 	// https://github.com/crewjam/saml/issues/613
 	idp.IDP.LoginURL = idp.IDP.SSOURL
-	server := Server{
+	server := &Server{
 		idp: idp,
 		h:   http.NewServeMux(),
 		l:   log.WithField("component", "server"),
+		b:   helpers.Env("IDP_BIND", "localhost:9009"),
 	}
 	server.h.HandleFunc("/health", server.health)
 	server.h.Handle("/", server.idp)
+	return server
+}
 
-	listen := helpers.Env("IDP_BIND", "localhost:9009")
-	server.b = listen
-	server.l.Infof("Server listening on '%s'", listen)
+func RunServer() {
+	server := newServer()
+	server.l.Infof("Server listening on '%s'", server.b)
 
 	if _, set := os.LookupEnv("IDP_SSL_CERT"); set {
 		server.l.Info("SSL enabled")
 		// IDP_SSL_CERT set, so we run SSL mode
-		err := http.ListenAndServeTLS(listen, os.Getenv("IDP_SSL_CERT"), os.Getenv("IDP_SSL_KEY"), server.logRequest(server.h))
+		err := http.ListenAndServeTLS(server.b, os.Getenv("IDP_SSL_CERT"), os.Getenv("IDP_SSL_KEY"), server.logRequest(server.h))
 		if err != nil {
 			panic(err)
 		}
 	} else {
-		err = http.ListenAndServe(listen, server.logRequest(server.h))
+		err := http.ListenAndServe(server.b, server.logRequest(server.h))
 		if err != nil {
 			panic(err)
 		}
