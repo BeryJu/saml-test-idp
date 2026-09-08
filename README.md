@@ -25,6 +25,8 @@ Two users are created on startup:
 | `user1`  | `user1pass` | Administrators, Users  |
 | `user2`  | `user2pass` | Users                  |
 
+The NameID follows the SP's requested `NameIDPolicy`: `emailAddress` returns `<user>@example.com`, `persistent` and `unspecified` return the username, anything else (including no policy) returns a transient NameID.
+
 ## Configuration
 
 - `IDP_BIND`: Which address and port to bind to. Defaults to `localhost:9009` (the docker image sets `0.0.0.0:9009`).

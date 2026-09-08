@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"beryju.io/saml-test-idp/pkg/helpers"
+	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlidp"
 	"github.com/crewjam/saml/samlsp"
 )
@@ -32,6 +33,27 @@ func (s *Server) logRequest(handler http.Handler) http.Handler {
 		s.l.WithField("remoteAddr", r.RemoteAddr).WithField("method", r.Method).Info(r.URL)
 		handler.ServeHTTP(w, r)
 	})
+}
+
+// nameIDPolicyProvider honours the NameIDPolicy requested by the SP. samlidp's own
+// session provider never sets NameIDFormat, so the IdP always issues transient NameIDs.
+type nameIDPolicyProvider struct {
+	saml.SessionProvider
+}
+
+func (p nameIDPolicyProvider) GetSession(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest) *saml.Session {
+	session := p.SessionProvider.GetSession(w, r, req)
+	if session == nil || req.Request.NameIDPolicy == nil || req.Request.NameIDPolicy.Format == nil {
+		return session
+	}
+	session.NameIDFormat = *req.Request.NameIDPolicy.Format
+	switch saml.NameIDFormat(session.NameIDFormat) {
+	case saml.EmailAddressNameIDFormat:
+		session.NameID = session.UserEmail
+	case saml.PersistentNameIDFormat, saml.UnspecifiedNameIDFormat:
+		session.NameID = session.UserName
+	}
+	return session
 }
 
 func mustBcrypt(pw string) []byte {
@@ -108,6 +130,7 @@ func newServer() *Server {
 	}
 	// https://github.com/crewjam/saml/issues/613
 	idp.IDP.LoginURL = idp.IDP.SSOURL
+	idp.IDP.SessionProvider = nameIDPolicyProvider{idp}
 	server := &Server{
 		idp: idp,
 		h:   http.NewServeMux(),

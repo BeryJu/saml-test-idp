@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/crewjam/saml"
 )
 
 const spMetadata = `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://sp.example.com/metadata">
@@ -43,5 +45,45 @@ func TestServer(t *testing.T) {
 		if !strings.Contains(string(body), tc.contains) {
 			t.Errorf("GET %s: body missing %q, got %s", tc.path, tc.contains, body)
 		}
+	}
+}
+
+type staticSessionProvider struct{ session *saml.Session }
+
+func (p staticSessionProvider) GetSession(_ http.ResponseWriter, _ *http.Request, _ *saml.IdpAuthnRequest) *saml.Session {
+	return p.session
+}
+
+func TestNameIDPolicyProvider(t *testing.T) {
+	email := string(saml.EmailAddressNameIDFormat)
+	persistent := string(saml.PersistentNameIDFormat)
+	for _, tc := range []struct {
+		name           string
+		format         *string
+		wantNameID     string
+		wantNameIDForm string
+	}{
+		{"no policy", nil, "transient-id", ""},
+		{"email", &email, "user1@example.com", email},
+		{"persistent", &persistent, "user1", persistent},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := nameIDPolicyProvider{staticSessionProvider{&saml.Session{
+				NameID:    "transient-id",
+				UserName:  "user1",
+				UserEmail: "user1@example.com",
+			}}}
+			req := &saml.IdpAuthnRequest{}
+			if tc.format != nil {
+				req.Request.NameIDPolicy = &saml.NameIDPolicy{Format: tc.format}
+			}
+			session := p.GetSession(nil, nil, req)
+			if session.NameID != tc.wantNameID {
+				t.Errorf("NameID = %q, want %q", session.NameID, tc.wantNameID)
+			}
+			if session.NameIDFormat != tc.wantNameIDForm {
+				t.Errorf("NameIDFormat = %q, want %q", session.NameIDFormat, tc.wantNameIDForm)
+			}
+		})
 	}
 }
