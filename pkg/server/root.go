@@ -14,6 +14,7 @@ import (
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlidp"
 	"github.com/crewjam/saml/samlsp"
+	dsig "github.com/russellhaering/goxmldsig"
 )
 
 type Server struct {
@@ -131,6 +132,8 @@ func newServer() *Server {
 	// https://github.com/crewjam/saml/issues/613
 	idp.IDP.LoginURL = idp.IDP.SSOURL
 	idp.IDP.SessionProvider = nameIDPolicyProvider{idp}
+	// crewjam defaults to RSA-SHA1, which most SPs reject
+	idp.IDP.SignatureMethod = dsig.RSASHA256SignatureMethod
 	server := &Server{
 		idp: idp,
 		h:   http.NewServeMux(),

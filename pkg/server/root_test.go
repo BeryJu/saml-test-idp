@@ -1,9 +1,12 @@
 package server
 
 import (
+	"encoding/base64"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -83,6 +86,53 @@ func TestNameIDPolicyProvider(t *testing.T) {
 			}
 			if session.NameIDFormat != tc.wantNameIDForm {
 				t.Errorf("NameIDFormat = %q, want %q", session.NameIDFormat, tc.wantNameIDForm)
+			}
+		})
+	}
+}
+
+func TestSigningCert(t *testing.T) {
+	sp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(spMetadata))
+	}))
+	defer sp.Close()
+	t.Setenv("IDP_METADATA_URL", sp.URL)
+
+	certPEM, err := os.ReadFile("../../saml-idp.pem")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _ := pem.Decode(certPEM)
+	want := base64.StdEncoding.EncodeToString(block.Bytes)
+
+	// once by path, once inline, as both are accepted
+	for name, cert := range map[string]string{
+		"path":   "../../saml-idp.pem",
+		"inline": string(certPEM),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("IDP_SIGNING_CERT", cert)
+			if name == "path" {
+				t.Setenv("IDP_SIGNING_KEY", "../../saml-idp.key")
+			} else {
+				key, err := os.ReadFile("../../saml-idp.key")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Setenv("IDP_SIGNING_KEY", string(key))
+			}
+
+			idp := httptest.NewServer(newServer().h)
+			defer idp.Close()
+
+			res, err := http.Get(idp.URL + "/metadata")
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			if !strings.Contains(string(body), want) {
+				t.Errorf("metadata does not advertise the configured signing cert, got %s", body)
 			}
 		})
 	}

@@ -33,13 +33,18 @@ The NameID follows the SP's requested `NameIDPolicy`: `emailAddress` returns `<u
 - `IDP_ROOT_URL`: Root URL you're using to access the IDP. Defaults to `http://localhost:9009`, or `https://localhost:9009` when `IDP_SSL_CERT` is set.
 - `IDP_METADATA_URL`: **Required.** URL the SP metadata is fetched from, on startup.
 
+Optionally, to sign assertions with a keypair you control (instead of the self-signed one generated on startup), set these variables. Each accepts either the PEM itself or a path to a file holding it. Assertions are signed with RSA-SHA256.
+
+- `IDP_SIGNING_CERT`: Certificate the IdP signs assertions with.
+- `IDP_SIGNING_KEY`: Matching RSA private key.
+
 ---
 
 Optionally, if you want to use SSL, set these variables
 
 - `IDP_SSL_CERT`: Path to the SSL Certificate the server should use.
 - `IDP_SSL_KEY`: Path to the SSL Key the server should use.
-- `IDP_SIGN_REQUESTS`: Set to `true` to sign responses with the SSL cert/key instead of a generated self-signed one.
+- `IDP_SIGN_REQUESTS`: Set to `true` to sign responses with the SSL cert/key instead of a generated self-signed one. Ignored when `IDP_SIGNING_CERT` is set.
 
 Note: If you're manually setting `IDP_ROOT_URL`, ensure that you prefix that URL with https.
 
